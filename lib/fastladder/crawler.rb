@@ -32,8 +32,7 @@ module Fastladder
     end
 
     def start
-      finish = false
-      until finish
+      until finished?
         begin
           logger.info "sleep: #{interval}s"
           sleep_interval
@@ -54,7 +53,7 @@ module Fastladder
           logger.error "Time out: #{$!}"
         rescue Interrupt
           logger.warn "\n=> #{$!.message} trapped. Terminating..."
-          finish = true
+          finish
         rescue Exception
           logger.error %!Crawler error: #{$!.message}\n#{$!.backtrace.join("\n")}!
         ensure
@@ -67,6 +66,14 @@ module Fastladder
     end
 
     private
+
+    def finished?
+      !!@finished
+    end
+
+    def finish
+      @finished = true
+    end
 
     def sleep_interval
       sleep(interval)
