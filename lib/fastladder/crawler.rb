@@ -51,17 +51,29 @@ module Fastladder
         increment_interval
       end
     rescue TimeoutError => exception
-      logger.error "Time out: #{exception}"
+      on_timeout_error(exception)
     rescue Interrupt => exception
-      logger.warn "\n=> #{exception} trapped. Terminating..."
-      finish
+      on_interrupt(exception)
     rescue Exception => exception
-      logger.error %!Crawler error: #{exception}\n#{exception.backtrace.join("\n")}!
+      on_exception(exception)
     ensure
       if crawl_status
         crawl_status.change_to_ok
         crawl_status.save
       end
+    end
+
+    def on_timeout_error(exception)
+      logger.error "Time out: #{exception}"
+    end
+
+    def on_interrupt(exception)
+      logger.warn "\n=> #{exception} trapped. Terminating..."
+      finish
+    end
+
+    def on_exception(exception)
+      logger.error %!Crawler error: #{exception}\n#{exception.backtrace.join("\n")}!
     end
 
     def finished?
