@@ -32,40 +32,40 @@ module Fastladder
     end
 
     def start
-      until finished?
-        begin
-          logger.info "sleep: #{interval}s"
-          sleep_interval
-          if feed = CrawlStatus.fetch_crawlable_feed
-            clear_interval
-            result = crawl(feed)
-            if result[:error]
-              logger.info "error: #{result[:message]}"
-            else
-              crawl_status = feed.crawl_status
-              crawl_status.http_status = result[:response_code]
-              logger.info "success: #{result[:message]}"
-            end
-          else
-            increment_interval
-          end
-        rescue TimeoutError
-          logger.error "Time out: #{$!}"
-        rescue Interrupt
-          logger.warn "\n=> #{$!.message} trapped. Terminating..."
-          finish
-        rescue Exception
-          logger.error %!Crawler error: #{$!.message}\n#{$!.backtrace.join("\n")}!
-        ensure
-          if crawl_status
-            crawl_status.status = CRAWL_OK
-            crawl_status.save
-          end
-        end
-      end
+      step until finished?
     end
 
     private
+
+    def step
+      logger.info "sleep: #{interval}s"
+      sleep_interval
+      if feed = CrawlStatus.fetch_crawlable_feed
+        clear_interval
+        result = crawl(feed)
+        if result[:error]
+          logger.info "error: #{result[:message]}"
+        else
+          crawl_status = feed.crawl_status
+          crawl_status.http_status = result[:response_code]
+          logger.info "success: #{result[:message]}"
+        end
+      else
+        increment_interval
+      end
+    rescue TimeoutError
+      logger.error "Time out: #{$!}"
+    rescue Interrupt
+      logger.warn "\n=> #{$!.message} trapped. Terminating..."
+      finish
+    rescue Exception
+      logger.error %!Crawler error: #{$!.message}\n#{$!.backtrace.join("\n")}!
+    ensure
+      if crawl_status
+        crawl_status.status = CRAWL_OK
+        crawl_status.save
+      end
+    end
 
     def finished?
       !!@finished
