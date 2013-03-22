@@ -94,7 +94,7 @@ describe Feed do
     context "crawl_status" do
       before {
         @ok_feed = FactoryGirl.create(:crawl_ok_feed)
-        @ng_feed = FactoryGirl.create(:crawl_ok_feed, crawl_status: FactoryGirl.create(:crawl_status, status: Fastladder::Crawler::CRAWL_NOW))
+        @ng_feed = FactoryGirl.create(:crawl_ok_feed, crawl_status: FactoryGirl.create(:crawl_status, status: CrawlerStatus::STATUS_NOW))
       }
       it { expect(Feed.crawlable).to include(@ok_feed)}
       it { expect(Feed.crawlable).not_to include(@ng_feed)}

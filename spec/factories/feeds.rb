@@ -12,7 +12,7 @@ FactoryGirl.define do
   end
 
   factory :crawl_ok_feed, parent: :feed do
-    crawl_status { FactoryGirl.create(:crawl_status, status: Fastladder::Crawler::CRAWL_OK) }
+    crawl_status { FactoryGirl.create(:crawl_status, status: CrawlerStatus::STATUS_OK) }
     subscribers_count 1
   end
 end

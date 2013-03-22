@@ -16,20 +16,27 @@
 #
 
 class CrawlStatus < ActiveRecord::Base
+  STATUS_OK  = 1
+  STATUS_NOW = 10
+
   belongs_to :feed
   attr_accessible :status, :crawled_on
 
-  scope :status_ok, ->{ where(status: Fastladder::Crawler::CRAWL_OK) }
+  scope :status_ok, ->{ where(status: STATUS_OK) }
   scope :expired, ->(ttl){ where("crawled_on IS NULL OR crawled_on < ?", ttl.ago) }
 
   def self.fetch_crawlable_feed(options = {})
-    CrawlStatus.update_all("status = #{Fastladder::Crawler::CRAWL_OK}", ['crawled_on < ?', 24.hours.ago])
+    CrawlStatus.update_all("status = #{STATUS_OK}", ['crawled_on < ?', 24.hours.ago])
     feed = nil
     CrawlStatus.transaction do
       if feed = Feed.crawlable.order("crawl_statuses.crawled_on").first
-        feed.crawl_status.update_attributes(:status => Fastladder::Crawler::CRAWL_NOW, :crawled_on => Time.now)
+        feed.crawl_status.update_attributes(:status => STATUS_NOW, :crawled_on => Time.now)
       end
     end
     feed
+  end
+
+  def change_to_ok
+    self.status = STATUS_OK
   end
 end

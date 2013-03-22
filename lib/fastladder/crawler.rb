@@ -12,8 +12,6 @@ module Fastladder
     INTERVAL_MAX   = 60
     ITEMS_LIMIT    = 500
     REDIRECT_LIMIT = 5
-    CRAWL_OK       = 1
-    CRAWL_NOW      = 10
     GETA           = [12307].pack("U")
 
     def self.start(*args)
@@ -61,7 +59,7 @@ module Fastladder
       logger.error %!Crawler error: #{exception}\n#{exception.backtrace.join("\n")}!
     ensure
       if crawl_status
-        crawl_status.status = CRAWL_OK
+        crawl_status.change_to_ok
         crawl_status.save
       end
     end

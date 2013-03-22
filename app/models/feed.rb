@@ -87,15 +87,15 @@ class Feed < ActiveRecord::Base
   end
 
   def crawl
-    return if crawl_status.status != Fastladder::Crawler::CRAWL_OK
-    crawl_status.update_attribute(:status, Fastladder::Crawler::CRAWL_NOW)
+    return if crawl_status.status != CrawlerStatus::STATUS_OK
+    crawl_status.update_attribute(:status, CrawlerStatus::STATUS_NOW)
     begin
       crawler = Fastladder::Crawler.new(logger)
       crawler.crawl(self)
     rescue
       logger.error "Crawler error: #{$!}"
     ensure
-      crawl_status.update_attribute(:status, Fastladder::Crawler::CRAWL_OK)
+      crawl_status.update_attribute(:status, CrawlerStatus::STATUS_OK)
     end
   end
 
