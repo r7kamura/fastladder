@@ -67,12 +67,21 @@ module Fastladder
     end
 
     describe "#start" do
-      context "when Interrupt is raised" do
-        before do
-          CrawlStatus.stub(:fetch_crawlable_feed).and_raise(Interrupt)
+      before do
+        count = 0
+        crawler.stub(:sleep) do
+          count += 1
+          raise Interrupt if count == 100
         end
+      end
 
-        it "exists" do
+      it "increments sleep interval at most 60" do
+        crawler.start
+        crawler.send(:interval).should == 60
+      end
+
+      context "when Interrupt is raised" do
+        it "exits" do
           crawler.start
         end
       end

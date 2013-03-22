@@ -9,6 +9,7 @@ end
 
 module Fastladder
   class Crawler
+    INTERVAL_MAX   = 60
     ITEMS_LIMIT    = 500
     REDIRECT_LIMIT = 5
     CRAWL_OK       = 1
@@ -31,14 +32,13 @@ module Fastladder
     end
 
     def start
-      interval = 0
       finish = false
       until finish
         begin
           logger.info "sleep: #{interval}s"
-          sleep interval
+          sleep_interval
           if feed = CrawlStatus.fetch_crawlable_feed
-            interval = 0
+            clear_interval
             result = crawl(feed)
             if result[:error]
               logger.info "error: #{result[:message]}"
@@ -48,7 +48,7 @@ module Fastladder
               logger.info "success: #{result[:message]}"
             end
           else
-            interval = interval > 60 ? 60 : interval + 1
+            increment_interval
           end
         rescue TimeoutError
           logger.error "Time out: #{$!}"
@@ -67,6 +67,22 @@ module Fastladder
     end
 
     private
+
+    def sleep_interval
+      sleep(interval)
+    end
+
+    def interval
+      @interval ||= 0
+    end
+
+    def clear_interval
+      @interval = 0
+    end
+
+    def increment_interval
+      @interval = [INTERVAL_MAX, interval + 1].min
+    end
 
     def create_logger
       Logger.new(logger_store).tap do |logger|
