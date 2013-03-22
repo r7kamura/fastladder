@@ -9,11 +9,11 @@ end
 
 module Fastladder
   class Crawler
-    ITEMS_LIMIT = 500
+    ITEMS_LIMIT    = 500
     REDIRECT_LIMIT = 5
-    CRAWL_OK = 1
-    CRAWL_NOW = 10
-    GETA = [12307].pack("U")
+    CRAWL_OK       = 1
+    CRAWL_NOW      = 10
+    GETA           = [12307].pack("U")
 
     def self.start(options = {})
       logger = options[:logger]
