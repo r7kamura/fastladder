@@ -142,19 +142,6 @@ module Fastladder
           result[:message] = "Error: #{response.code} #{response.message}"
           result[:error] = true
           break
-=begin
-        when Net::HTTPUnauthorized
-          ...
-          break
-        when Net::HTTPMovedPermanently
-          if crawl_status.http_status == 301  # Moved Permanently
-            if crawl_status.response_changed_on < 1.week.ago
-              feed.feedlink = feedlink
-              modified_on = nil
-            end
-          end
-          break
-=end
         when Net::HTTPRedirection
           logger.info "Redirect: #{feed.feedlink} => #{response["location"]}"
           feed.feedlink = URI.join(feed.feedlink, response["location"])
