@@ -16,7 +16,7 @@ module Fastladder
     GETA           = [12307].pack("U")
 
     def self.start(*args)
-      new(*args).run
+      new(*args).start
     end
 
     attr_reader :options
@@ -30,7 +30,7 @@ module Fastladder
       @logger ||= create_logger
     end
 
-    def run
+    def start
       interval = 0
       finish = false
       until finish
