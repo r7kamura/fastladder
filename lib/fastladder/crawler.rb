@@ -22,7 +22,6 @@ module Fastladder
 
     def initialize(options = {})
       @options = options
-      logger.warn '=> Booting FeedFetcher...'
     end
 
     def logger
@@ -30,6 +29,7 @@ module Fastladder
     end
 
     def start
+      logger.warn '=> Booting FeedFetcher...'
       step until finished?
     end
 
@@ -37,29 +37,32 @@ module Fastladder
 
     def step
       sleep_interval
-      if feed = CrawlStatus.fetch_crawlable_feed
-        clear_interval
-        result = crawl(feed)
-        if result[:error]
-          logger.info "error: #{result[:message]}"
-        else
-          crawl_status = feed.crawl_status
-          crawl_status.http_status = result[:response_code]
-          logger.info "success: #{result[:message]}"
-        end
-      else
-        increment_interval
-      end
+      crawl
     rescue TimeoutError => exception
       on_timeout_error(exception)
     rescue Interrupt => exception
       on_interrupt(exception)
     rescue Exception => exception
       on_exception(exception)
-    ensure
-      if crawl_status
+    end
+
+    def crawl
+      if feed = CrawlStatus.fetch_crawlable_feed
+        clear_interval
+        handle_result(fetch(feed))
+      else
+        increment_interval
+      end
+    end
+
+    def handle_result(result)
+      if result[:error]
+        logger.info "error: #{result[:message]}"
+      elsif crawl_status = feed.crawl_status
+        crawl_status.http_status = result[:response_code]
         crawl_status.change_to_ok
         crawl_status.save
+        logger.info "success: #{result[:message]}"
       end
     end
 
@@ -115,7 +118,7 @@ module Fastladder
       options[:log_level] || Logger::INFO
     end
 
-    def crawl(feed)
+    def fetch(feed)
       response = nil
       result = {
         :message => '',
