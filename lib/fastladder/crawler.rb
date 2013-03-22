@@ -16,14 +16,9 @@ module Fastladder
     GETA           = [12307].pack("U")
 
     def self.start(options = {})
-      logger = options[:logger]
-
-      unless logger
-        target = options[:log_file] || STDOUT
-        logger = Logger.new(target)
-        logger.level = options[:log_level] || Logger::INFO
-      end
-
+      target = options[:log_file] || STDOUT
+      logger = Logger.new(target)
+      logger.level = options[:log_level] || Logger::INFO
       logger.warn '=> Booting FeedFetcher...'
       self.new(logger).run
     end
