@@ -38,7 +38,6 @@ module Fastladder
     private
 
     def step
-      logger.info "sleep: #{interval}s"
       sleep_interval
       if feed = CrawlStatus.fetch_crawlable_feed
         clear_interval
@@ -76,6 +75,7 @@ module Fastladder
     end
 
     def sleep_interval
+      logger.info "sleep: #{interval}s"
       sleep(interval)
     end
 
