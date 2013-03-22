@@ -52,13 +52,13 @@ module Fastladder
       else
         increment_interval
       end
-    rescue TimeoutError
-      logger.error "Time out: #{$!}"
-    rescue Interrupt
-      logger.warn "\n=> #{$!.message} trapped. Terminating..."
+    rescue TimeoutError => exception
+      logger.error "Time out: #{exception}"
+    rescue Interrupt => exception
+      logger.warn "\n=> #{exception} trapped. Terminating..."
       finish
-    rescue Exception
-      logger.error %!Crawler error: #{$!.message}\n#{$!.backtrace.join("\n")}!
+    rescue Exception => exception
+      logger.error %!Crawler error: #{exception}\n#{exception.backtrace.join("\n")}!
     ensure
       if crawl_status
         crawl_status.status = CRAWL_OK
