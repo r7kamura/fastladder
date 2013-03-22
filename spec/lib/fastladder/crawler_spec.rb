@@ -9,7 +9,7 @@ module Fastladder
     end
 
     let(:options) do
-      {}
+      { :log_file => StringIO.new }
     end
 
     describe ".new" do
@@ -29,10 +29,6 @@ module Fastladder
 
       describe "about its destination to write" do
         context "when options[:log_file] is given" do
-          before do
-            options[:log_file] = StringIO.new
-          end
-
           it "writes logs into given store" do
             logger.info("test")
             options[:log_file].string.should include("test")
@@ -40,6 +36,10 @@ module Fastladder
         end
 
         context "when options[:log_file] is not given" do
+          before do
+            options.delete(:log_file)
+          end
+
           it "writes logs into STDOUT" do
             STDOUT.should_receive(:write).at_least(1).and_call_original
             logger.info("test")
@@ -69,10 +69,11 @@ module Fastladder
     describe "#start" do
       before do
         count = 0
-        crawler.stub(:sleep) do
+        CrawlStatus.stub(:fetch_crawlable_feed) do
           count += 1
           raise Interrupt if count == 100
         end
+        crawler.stub(:sleep)
       end
 
       it "increments sleep interval at most 60" do
