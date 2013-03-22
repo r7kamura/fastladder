@@ -1,7 +1,6 @@
 require "fastladder"
 require "digest/sha1"
 require "tempfile"
-require "logger"
 begin
   require "image_utils"
 rescue LoadError
@@ -14,22 +13,11 @@ module Fastladder
     REDIRECT_LIMIT = 5
     GETA           = [12307].pack("U")
 
-    def self.start(*args)
-      new(*args).start
-    end
-
-    attr_reader :options
-
-    def initialize(options = {})
-      @options = options
-    end
-
-    def logger
-      @logger ||= create_logger
+    def self.start
+      new.start
     end
 
     def start
-      logger.warn '=> Booting FeedFetcher...'
       step until finished?
     end
 
@@ -38,12 +26,9 @@ module Fastladder
     def step
       sleep_interval
       crawl
-    rescue TimeoutError => exception
-      on_timeout_error(exception)
-    rescue Interrupt => exception
-      on_interrupt(exception)
-    rescue Exception => exception
-      on_exception(exception)
+    rescue Interrupt
+      finish
+    rescue Exception
     end
 
     def crawl
@@ -57,26 +42,11 @@ module Fastladder
 
     def handle_result(result)
       if result[:error]
-        logger.info "error: #{result[:message]}"
       elsif crawl_status = feed.crawl_status
         crawl_status.http_status = result[:response_code]
         crawl_status.change_to_ok
         crawl_status.save
-        logger.info "success: #{result[:message]}"
       end
-    end
-
-    def on_timeout_error(exception)
-      logger.error "Time out: #{exception}"
-    end
-
-    def on_interrupt(exception)
-      logger.warn "\n=> #{exception} trapped. Terminating..."
-      finish
-    end
-
-    def on_exception(exception)
-      logger.error %!Crawler error: #{exception}\n#{exception.backtrace.join("\n")}!
     end
 
     def finished?
@@ -88,7 +58,6 @@ module Fastladder
     end
 
     def sleep_interval
-      logger.info "sleep: #{interval}s"
       sleep(interval)
     end
 
@@ -104,20 +73,6 @@ module Fastladder
       @interval = [INTERVAL_MAX, interval + 1].min
     end
 
-    def create_logger
-      Logger.new(logger_store).tap do |logger|
-        logger.level = logger_level
-      end
-    end
-
-    def logger_store
-      options[:log_file] || STDOUT
-    end
-
-    def logger_level
-      options[:log_level] || Logger::INFO
-    end
-
     def fetch(feed)
       response = nil
       result = {
@@ -127,10 +82,8 @@ module Fastladder
       }
       REDIRECT_LIMIT.times do
         begin
-          logger.info "fetch: #{feed.feedlink}"
           response = Fastladder::fetch(feed.feedlink, :modified_on => feed.modified_on)
         end
-        logger.info "HTTP status: [#{response.code}] #{feed.feedlink}"
         case response
         when Net::HTTPNotModified
           break
@@ -143,7 +96,6 @@ module Fastladder
           result[:error] = true
           break
         when Net::HTTPRedirection
-          logger.info "Redirect: #{feed.feedlink} => #{response["location"]}"
           feed.feedlink = URI.join(feed.feedlink, response["location"])
           feed.modified_on = nil
           feed.save
@@ -169,7 +121,6 @@ module Fastladder
         result[:error] = 'Cannot parse feed'
         return result
       end
-      logger.info "parsed: [#{parsed.entries.size} items] #{feed.feedlink}"
       items = parsed.entries.map { |item|
         Item.new({
           :feed_id => feed.id,
@@ -187,14 +138,12 @@ module Fastladder
       }
 
       if items.size > ITEMS_LIMIT
-        logger.info "too large feed: #{feed.feedlink}(#{feed.items.size})"
         items = items[0, ITEMS_LIMIT]
       end
 
       items = items.reject { |item| feed.items.exists?(["link = ? and digest = ?", item.link, item.digest]) }
 
       if items.size > ITEMS_LIMIT / 2
-        logger.info "delete all items: #{feed.feedlink}"
         Items.delete_all(["feed_id = ?", feed.id])
       end
 
@@ -220,7 +169,6 @@ module Fastladder
         if last_item = feed.items.recent.first
           modified_on = last_item.created_on
         elsif last_modified = sourece["last-modified"]
-          logger.info source['last-modified']
           modified_on = Time.rfc2822(last_modified)
         end
         feed.modified_on = modified_on
