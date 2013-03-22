@@ -65,5 +65,17 @@ module Fastladder
         end
       end
     end
+
+    describe "#start" do
+      context "when Interrupt is raised" do
+        before do
+          CrawlStatus.stub(:fetch_crawlable_feed).and_raise(Interrupt)
+        end
+
+        it "exists" do
+          crawler.start
+        end
+      end
+    end
   end
 end
