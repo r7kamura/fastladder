@@ -15,16 +15,19 @@ module Fastladder
     CRAWL_NOW      = 10
     GETA           = [12307].pack("U")
 
-    def self.start(options = {})
-      target = options[:log_file] || STDOUT
-      logger = Logger.new(target)
-      logger.level = options[:log_level] || Logger::INFO
-      logger.warn '=> Booting FeedFetcher...'
-      self.new(logger).run
+    def self.start(*args)
+      new(*args).run
     end
 
-    def initialize(logger)
-      @logger = logger
+    attr_reader :options
+
+    def initialize(options = {})
+      @options = options
+      logger.warn '=> Booting FeedFetcher...'
+    end
+
+    def logger
+      @logger ||= create_logger
     end
 
     def run
@@ -32,28 +35,28 @@ module Fastladder
       finish = false
       until finish
         begin
-          @logger.info "sleep: #{interval}s"
+          logger.info "sleep: #{interval}s"
           sleep interval
           if feed = CrawlStatus.fetch_crawlable_feed
             interval = 0
             result = crawl(feed)
             if result[:error]
-              @logger.info "error: #{result[:message]}"
+              logger.info "error: #{result[:message]}"
             else
               crawl_status = feed.crawl_status
               crawl_status.http_status = result[:response_code]
-              @logger.info "success: #{result[:message]}"
+              logger.info "success: #{result[:message]}"
             end
           else
             interval = interval > 60 ? 60 : interval + 1
           end
         rescue TimeoutError
-          @logger.error "Time out: #{$!}"
+          logger.error "Time out: #{$!}"
         rescue Interrupt
-          @logger.warn "\n=> #{$!.message} trapped. Terminating..."
+          logger.warn "\n=> #{$!.message} trapped. Terminating..."
           finish = true
         rescue Exception
-          @logger.error %!Crawler error: #{$!.message}\n#{$!.backtrace.join("\n")}!
+          logger.error %!Crawler error: #{$!.message}\n#{$!.backtrace.join("\n")}!
         ensure
           if crawl_status
             crawl_status.status = CRAWL_OK
@@ -61,6 +64,22 @@ module Fastladder
           end
         end
       end
+    end
+
+    private
+
+    def create_logger
+      Logger.new(logger_store).tap do |logger|
+        logger.level = logger_level
+      end
+    end
+
+    def logger_store
+      options[:log_file] || STDOUT
+    end
+
+    def logger_level
+      options[:log_level] || Logger::INFO
     end
 
     def crawl(feed)
@@ -72,10 +91,10 @@ module Fastladder
       }
       REDIRECT_LIMIT.times do
         begin
-          @logger.info "fetch: #{feed.feedlink}"
+          logger.info "fetch: #{feed.feedlink}"
           response = Fastladder::fetch(feed.feedlink, :modified_on => feed.modified_on)
         end
-        @logger.info "HTTP status: [#{response.code}] #{feed.feedlink}"
+        logger.info "HTTP status: [#{response.code}] #{feed.feedlink}"
         case response
         when Net::HTTPNotModified
           break
@@ -101,7 +120,7 @@ module Fastladder
           break
 =end
         when Net::HTTPRedirection
-          @logger.info "Redirect: #{feed.feedlink} => #{response["location"]}"
+          logger.info "Redirect: #{feed.feedlink} => #{response["location"]}"
           feed.feedlink = URI.join(feed.feedlink, response["location"])
           feed.modified_on = nil
           feed.save
@@ -127,7 +146,7 @@ module Fastladder
         result[:error] = 'Cannot parse feed'
         return result
       end
-      @logger.info "parsed: [#{parsed.entries.size} items] #{feed.feedlink}"
+      logger.info "parsed: [#{parsed.entries.size} items] #{feed.feedlink}"
       items = parsed.entries.map { |item|
         Item.new({
           :feed_id => feed.id,
@@ -145,14 +164,14 @@ module Fastladder
       }
 
       if items.size > ITEMS_LIMIT
-        @logger.info "too large feed: #{feed.feedlink}(#{feed.items.size})"
+        logger.info "too large feed: #{feed.feedlink}(#{feed.items.size})"
         items = items[0, ITEMS_LIMIT]
       end
 
       items = items.reject { |item| feed.items.exists?(["link = ? and digest = ?", item.link, item.digest]) }
 
       if items.size > ITEMS_LIMIT / 2
-        @logger.info "delete all items: #{feed.feedlink}"
+        logger.info "delete all items: #{feed.feedlink}"
         Items.delete_all(["feed_id = ?", feed.id])
       end
 
@@ -178,7 +197,7 @@ module Fastladder
         if last_item = feed.items.recent.first
           modified_on = last_item.created_on
         elsif last_modified = sourece["last-modified"]
-          @logger.info source['last-modified']
+          logger.info source['last-modified']
           modified_on = Time.rfc2822(last_modified)
         end
         feed.modified_on = modified_on
@@ -221,6 +240,5 @@ module Fastladder
         !pair.include?(GETA) and pair[0] != pair[1]
       }.size <= 5
     end
-
   end
 end
