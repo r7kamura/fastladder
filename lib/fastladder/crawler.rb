@@ -73,75 +73,73 @@ module Fastladder
       @interval = [INTERVAL_MAX, interval + 1].min
     end
 
-    def fetch(feed)
-      response = nil
-      result = {
-        :message => '',
-        :error => false,
-        :response_code => nil,
-      }
-      REDIRECT_LIMIT.times do
-        begin
-          response = Fastladder::fetch(feed.feedlink, :modified_on => feed.modified_on)
-        end
-        case response
-        when Net::HTTPNotModified
-          break
-        when Net::HTTPSuccess
-          ret = update(feed, response)
-          result[:message] = "#{ret[:new_items]} new items, #{ret[:updated_items]} updated items"
-          break
-        when Net::HTTPClientError, Net::HTTPServerError
-          result[:message] = "Error: #{response.code} #{response.message}"
-          result[:error] = true
-          break
-        when Net::HTTPRedirection
-          feed.feedlink = URI.join(feed.feedlink, response["location"])
-          feed.modified_on = nil
-          feed.save
+    def fetch(feed, redirect_count = 0)
+      case response = Fastladder.fetch(feed.feedlink, :modified_on => feed.modified_on)
+      when Net::HTTPNotModified
+        {
+          :message       => '',
+          :error         => false,
+          :response_code => response.code.to_i,
+        }
+      when Net::HTTPSuccess
+        ret = update(feed, response)
+        {
+          :message       => "#{ret[:new_items]} new items, #{ret[:updated_items]} updated items",
+          :error         => false,
+          :response_code => response.code.to_i,
+        }
+      when Net::HTTPRedirection
+        feed.update_attributes(
+          :feedlink    => URI.join(feed.feedlink, response["location"]),
+          :modified_on => nil
+        )
+        if redirect_count == REDIRECT_LIMIT
+          {
+            :message       => '',
+            :error         => false,
+            :response_code => response.code.to_i,
+          }
         else
-          # HTTPUnknownResponse, HTTPInformation
-          result[:message] = "Error: #{response.code} #{response.message}"
-          result[:error] = true
-          break
+          fetch(feed, redirect_count + 1)
         end
+      else
+        {
+          :message       => "Error: #{response.code} #{response.message}",
+          :error         => true,
+          :response_code => response.code.to_i,
+        }
       end
-      result[:response_code] = response.code.to_i
-      result
     end
 
     private
-    def update(feed, source)
+
+    def update(feed, response)
       result = {
-        :new_items => 0,
+        :new_items     => 0,
         :updated_items => 0,
-        :error => nil
+        :error         => nil
       }
-      unless parsed = Feedzirra::Feed.parse(source.body)
-        result[:error] = 'Cannot parse feed'
-        return result
-      end
-      items = parsed.entries.map { |item|
-        Item.new({
-          :feed_id => feed.id,
-          :link => item.url || "",
-          :title => item.title || "",
-          :body => item.content || item.summary,
-          :author => item.author,
-          :category => item.categories.first,
-          :enclosure => nil,
+
+      parsed = Feedzirra::Feed.parse(response.body)
+      return result unless parsed
+
+      items = parsed.entries.map {|item|
+        Item.new(
+          :author         => item.author,
+          :body           => item.content || item.summary,
+          :category       => item.categories.first,
+          :digest         => item_digest(item),
+          :enclosure      => nil,
           :enclosure_type => nil,
-          :digest => item_digest(item),
-          :stored_on => Time.now,
-          :modified_on => item.published ? item.published.to_datetime : nil,
-        })
+          :feed_id        => feed.id,
+          :link           => item.url || "",
+          :modified_on    => item.published ? item.published.to_datetime : nil,
+          :stored_on      => Time.now,
+          :title          => item.title || "",
+        )
+      }.first(ITEMS_LIMIT).reject {|item|
+        feed.items.exists?(["link = ? and digest = ?", item.link, item.digest])
       }
-
-      if items.size > ITEMS_LIMIT
-        items = items[0, ITEMS_LIMIT]
-      end
-
-      items = items.reject { |item| feed.items.exists?(["link = ? and digest = ?", item.link, item.digest]) }
 
       if items.size > ITEMS_LIMIT / 2
         Items.delete_all(["feed_id = ?", feed.id])
@@ -175,16 +173,12 @@ module Fastladder
         Subscription.update_all(["has_unread = ?", true], ["feed_id = ?", feed.id])
       end
 
-      [
-        [:title, parsed.title],
-        [:link, parsed.url],
-        [:description, parsed.description || ""],
-      ].each do |column, value|
-        feed.__send__("#{column}=", value) if feed.__send__(column) != value
-      end
+      feed.title       = parsed.title
+      feed.link        = parsed.url
+      feed.description = parsed.description || ""
       feed.save
-
       feed.fetch_favicon!
+
       GC.start
 
       result
@@ -198,17 +192,18 @@ module Fastladder
     end
 
     def almost_same(str1, str2)
-      if str1 == str2
-        return true
-      end
+      # Compare string
+      return true if str1 == str2
+
       chars1 = str1.split(//)
       chars2 = str2.split(//)
-      if chars1.length != chars2.length
-        return false
-      end
-      # count differences
-      [chars1, chars2].transpose.find_all { |pair|
-        !pair.include?(GETA) and pair[0] != pair[1]
+
+      # Compare character length
+      return false if chars1.length != chars2.length
+
+      # Count character differences
+      [chars1, chars2].transpose.select { |pair|
+        !pair.include?(GETA) && pair[0] != pair[1]
       }.size <= 5
     end
   end
